@@ -54,6 +54,42 @@ class _CalendarScreenState extends State<CalendarScreen>{
       _selectedDay.add(Duration(days: 22)): ['Event A13'],
       _selectedDay.add(Duration(days: 26)): ['Event A14'],
     };
+    eventData = [
+      EventData(
+        name: '1',
+        startTime: DateTime(2021,1,7,5,0),
+        endTime: DateTime(2021,1,7,9,0),
+      ),
+      EventData(
+        name: '2',
+        startTime: DateTime(2021,1,7,6,25),
+        endTime: DateTime(2021,1,7,7,0),
+      ),
+      EventData(
+        name: '2',
+        startTime: DateTime(2021,1,7,5,45),
+        endTime: DateTime(2021,1,7,7,45),
+      ),
+
+
+      ///
+      EventData(
+        name: '1',
+        startTime: DateTime(2021,1,7,10,0),
+        endTime: DateTime(2021,1,7,15,0),
+      ),
+      EventData(
+        name: '2',
+        startTime: DateTime(2021,1,7,10,10),
+        endTime: DateTime(2021,1,7,11,0),
+      ),
+      EventData(
+        name: '3',
+        startTime: DateTime(2021,1,7,10,50),
+        endTime: DateTime(2021,1,7,11,45),
+      ),
+
+    ];
     super.initState();
   }
 
@@ -316,36 +352,62 @@ class EventGroupView extends StatelessWidget {
   Widget build(BuildContext context) {
     if (eventGroup.eventData.isEmpty) return SizedBox();
 
-    final groupPosition = _calculatePositionInTimeline(selectDay, eventGroup.startDate);
+    final groupPosition =
+        _calculatePositionInTimeline(selectDay, eventGroup.startDate);
+
+    final eventInRow = getEventInRow();
 
     return Positioned(
       left: 85.0,
       right: 0.0,
       top: groupPosition,
-      height: _calculatePositionInTimeline(selectDay, eventGroup.endDate) - groupPosition,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      height: _calculatePositionInTimeline(selectDay, eventGroup.endDate) -
+          groupPosition,
+      child: Stack(
         children: [
-          for(int index = 0; index<eventGroup.eventData.length; index++) Expanded(
-            child: EventItem(
+          for (int index = 0; index < eventGroup.eventData.length; index++)
+            EventItem(
               selectDay: selectDay,
               groupPosition: groupPosition,
               event: eventGroup.eventData[index],
               index: index,
-              eventCallback: eventGroup.eventData.length == 1 ? null : eventCallback,
-            ),
-          )
+              eventInRow: eventInRow,
+              maxLength: eventGroup.eventData.length,
+              eventCallback:
+                  eventGroup.eventData.length == 1 ? null : eventCallback,
+            )
         ],
       ),
     );
   }
+
+  List<EventData> getEventInRow(){
+
+    List<EventData> listEvent = [];
+
+    listEvent.add(eventGroup.eventData[0]);
+
+    for(int i = 1; i< eventGroup.eventData.length; i++){
+      if (eventGroup.eventData[i].startTime
+              .difference(listEvent.last.startTime)
+              .inMinutes <= 30) {
+        listEvent.add(eventGroup.eventData[i]);
+      }
+    }
+
+    return listEvent;
+
+  }
+
 }
 
 class EventItem extends StatefulWidget {
   final DateTime selectDay;
   final double groupPosition;
   final EventData event;
+  final List<EventData> eventInRow;
   final int index;
+  final int maxLength;
   final Function(int index, double position, EventData event) eventCallback;
 
   EventItem({
@@ -353,6 +415,8 @@ class EventItem extends StatefulWidget {
     this.index,
     this.groupPosition,
     this.event,
+    this.eventInRow,
+    this.maxLength,
     this.eventCallback,
   });
 
@@ -376,30 +440,31 @@ class _EventItemState extends State<EventItem> with SingleTickerProviderStateMix
   @override
   Widget build(BuildContext context) {
     final position = _calculatePositionInTimeline(widget.selectDay,widget.event.startTime);
-    return GestureDetector(
-      onTapDown: (value){
-        widget.eventCallback?.call(widget.index, position, widget.event);
-      },
-      onTapUp: (value){
-        widget.eventCallback?.call(-1, 0, null);
-      },
-      child: AnimatedBuilder(
-        animation: animate,
-        builder: (BuildContext context, Widget child) {
-          return ScaleTransition(
-            scale: animate,
+    return AnimatedBuilder(
+      animation: animate,
+      builder: (BuildContext context, Widget child) {
+        return ScaleTransition(
+          scale: animate,
+          child: GestureDetector(
+            onTapDown: (value){
+              widget.eventCallback?.call(widget.index, position, widget.event);
+            },
+            onTapUp: (value){
+              widget.eventCallback?.call(-1, 0, null);
+            },
             child: Container(
               margin: EdgeInsets.only(
                 top: position - widget.groupPosition,
-                left: 1.0,
-                right: 1.0,
+                left: getPaddingLeft(),
+                right: 1,
               ),
               height: _calculatePositionInTimeline(widget.selectDay,widget.event.endTime) - position,
+              width: (checkInRow() && widget.eventInRow.length > 1) ? getWidth() : double.infinity,
               decoration: BoxDecoration(
                 color: Colors.blueGrey,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
+                    color: Colors.white,
                     spreadRadius: 1,
                     blurRadius: 1,
                     offset: Offset(0, 1),
@@ -410,31 +475,73 @@ class _EventItemState extends State<EventItem> with SingleTickerProviderStateMix
                 padding: const EdgeInsets.all(8.0),
                 child: Wrap(
                   direction: Axis.vertical,
+                  verticalDirection: VerticalDirection.down,
                   children: [
                     Text(
                       widget.event.name ?? '',
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: 16,
                         color: Colors.white,
                       ),
                     ),
-                    Text(
+                    /*Text(
                       '${widget.event.startTime.startOfDay()} - ${widget.event.endTime.startOfDay()}',
+                      maxLines: 2,
                       style: TextStyle(
                         fontSize: 14,
                         color: Colors.white,
                       ),
-                    ),
+                    ),*/
                   ],
                 ),
               ),
             ),
+          ),
 
-          );
-        },
-      ),
+        );
+      },
     );
   }
+
+  bool checkInRow(){
+    bool result = false;
+    widget.eventInRow.forEach((element) {
+      if(element.name.compareTo(widget.event.name) == 0){
+        result = true;
+      }
+    });
+
+    return result;
+  }
+
+  double getWidth(){
+    double width = (MediaQuery
+        .of(context)
+        .size
+        .width - 85) / widget.eventInRow.length;
+
+    return width;
+  }
+
+  double getPaddingLeft(){
+    double result = 0;
+
+    if(checkInRow() && widget.eventInRow.length > 1){
+      result = widget.index * getWidth();
+    }
+    else{
+      if(widget.eventInRow.length == 1){
+        result = widget.index * 20.0;
+      }
+      else
+        result = widget.index * 20.0;
+    }
+
+    return result;
+
+  }
+
+
 }
 
 const oneHourItemHeight = 72.0;
@@ -565,10 +672,6 @@ double _calculatePositionInTimeline(DateTime selectDay, DateTime day) {
   else if(day.startOfDay().isAfter(selectDay.startOfDay())){
     currentTimeTopPosition = 24*60*60 * pixelPerSecond;
   }
-  else{
-    currentTimeTopPosition = differentFromStartOfDay.inSeconds * pixelPerSecond;
-  }
-
 
   return oneHourItemHeight / 2.0 + currentTimeTopPosition;
 }
